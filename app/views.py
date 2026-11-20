@@ -1,5 +1,8 @@
 """HTTP routes: HTML pages for the data clerk plus a small JSON API."""
 
+import hashlib
+import secrets
+
 from flask import (
     Blueprint,
     abort,
@@ -11,7 +14,7 @@ from flask import (
     url_for,
 )
 
-from . import db, decoder, service
+from . import db, decoder, merge, service
 
 bp = Blueprint("main", __name__)
 
@@ -175,6 +178,116 @@ def register_firmware():
             "success",
         )
     return redirect(url_for("main.index"))
+
+
+# --- 合库：采集台备份导入 -------------------------------------------------
+
+
+def _source_summary(staged):
+    """One row per source firmware used by the staged frames."""
+    counts = {}
+    for f in staged["frames"]:
+        counts[f["fw_version"]] = counts.get(f["fw_version"], 0) + 1
+    return [
+        {
+            "fw_version": fw,
+            "word_order": staged["firmwares"].get(fw),
+            "frame_count": counts[fw],
+        }
+        for fw in sorted(counts)
+    ]
+
+
+def _render_merge_preview(token, staged, backup_hash):
+    conn = db.get_db()
+    with db.read_snapshot(conn):
+        firmwares = service.list_firmwares(conn)
+    return render_template(
+        "merge_preview.html",
+        token=token,
+        backup_hash=backup_hash,
+        sources=_source_summary(staged),
+        frames=staged["frames"],
+        firmwares=firmwares,
+        word_orders=decoder.WORD_ORDERS,
+    )
+
+
+@bp.post("/merge")
+def merge_upload():
+    storage = request.files.get("backup")
+    if storage is None:
+        flash("请选择采集台的 SQLite 备份文件", "error")
+        return redirect(url_for("main.index"))
+    data = storage.read()
+    try:
+        staged = merge.parse_backup(data)
+    except merge.BackupError as exc:
+        flash(str(exc), "error")
+        return redirect(url_for("main.index"))
+
+    token = secrets.token_urlsafe(16)
+    backup_hash = hashlib.sha256(data).hexdigest()
+    service.stage_merge(db.get_db(), token, backup_hash, staged)
+    return _render_merge_preview(token, staged, backup_hash)
+
+
+@bp.post("/merge/apply")
+def merge_apply():
+    token = (request.form.get("token") or "").strip()
+    staged = service.load_staged_merge(db.get_db(), token) if token else None
+    if staged is None:
+        flash("合库会话不存在或已失效，请重新上传备份。", "error")
+        return redirect(url_for("main.index"))
+
+    sources = sorted({f["fw_version"] for f in staged["frames"]})
+    form_sources = request.form.getlist("source")
+    form_targets = request.form.getlist("target")
+    error = None
+    mapping = {}
+    if sorted(form_sources) != sources or len(form_targets) != len(form_sources):
+        error = "提交的映射与备份中的源固件号不一致，请重新上传备份。"
+    else:
+        for src, tgt in zip(form_sources, form_targets):
+            tgt = tgt.strip()
+            if not tgt:
+                error = "每个源固件号都必须指定主库固件号。"
+                break
+            if len(tgt) > 128:
+                error = "目标固件号过长。"
+                break
+            mapping[src] = tgt
+        else:
+            if len(set(mapping.values())) != len(mapping):
+                error = "不同的源固件号不能映射到同一个目标固件号。"
+    if error:
+        flash(error, "error")
+        return _render_merge_preview(token, staged, staged["backup_hash"])
+
+    try:
+        receipt, replayed = service.apply_merge(db.get_db(), staged, mapping)
+    except service.MergeRejected as exc:
+        return render_template(
+            "merge_rejected.html",
+            message=str(exc),
+            problems=exc.problems,
+            conflicts=exc.conflicts,
+        )
+
+    if replayed:
+        flash("该备份与映射此前已完成合库，以下为原回执，主库未再次变更。", "info")
+    else:
+        flash(
+            "合库完成：映射 %d 个源固件号，新增 %d 帧，沿用 %d 帧。"
+            % (len(receipt["mapping"]), receipt["inserted"], receipt["reused"]),
+            "success",
+        )
+    return render_template(
+        "merge_receipt.html",
+        receipt=receipt,
+        replayed=replayed,
+        word_orders=decoder.WORD_ORDERS,
+    )
 
 
 @bp.get("/devices/<path:device_id>")

@@ -14,6 +14,19 @@
 </section>
 
 <section>
+  <h2>合库：导入采集台备份</h2>
+  <p class="muted">
+    上传临时采集台的独立 SQLite 备份（本应用库结构，至多 {{ max_batch }} 帧）。
+    上传后页面列出帧所用的源固件号及字序，由你为各源号指定主库固件号（目标号不得重复）；
+    同名固件字序相反时请改用新的固件号。固件登记、新帧与回执一并提交，任何不一致都整批拒绝且主库不变。
+  </p>
+  <form class="inline" method="post" action="{{ url_for('main.merge_upload') }}" enctype="multipart/form-data">
+    <input type="file" name="backup" accept=".sqlite3,.sqlite,.db" required>
+    <button type="submit">上传备份</button>
+  </form>
+</section>
+
+<section>
   <h2>登记固件字序（不可更改）</h2>
   <p class="muted">
     登记后立即补解该固件全部待解帧。未登记固件的帧保持「待解」，不会猜测读数。

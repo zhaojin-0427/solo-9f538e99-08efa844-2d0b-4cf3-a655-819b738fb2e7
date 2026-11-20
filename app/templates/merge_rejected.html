@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block content %}
+<section>
+  <h2>合库被拒绝</h2>
+  <p class="flash error">{{ message }}</p>
+  <p class="muted">整批未写入，主库保持合库前状态。</p>
+  {% if problems %}
+  <h3>映射问题</h3>
+  <ul>
+    {% for p in problems %}
+      <li>{{ p }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  {% if conflicts %}
+  <h3>帧冲突</h3>
+  <table>
+    <thead><tr><th>设备号</th><th>帧号</th><th>已存原始字</th><th>备份原始字</th></tr></thead>
+    <tbody>
+    {% for c in conflicts %}
+      <tr>
+        <td>{{ c.device_id }}</td>
+        <td>{{ c.frame_no }}</td>
+        <td class="mono">{{ c.stored_raw_word }}</td>
+        <td class="mono">{{ c.uploaded_raw_word }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+  <p><a href="{{ url_for('main.index') }}">返回首页</a></p>
+</section>
+{% endblock %}

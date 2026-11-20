@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block content %}
+<section>
+  <h2>合库：确认固件映射</h2>
+  <p class="muted">
+    备份共 {{ frames|length }} 帧，校验摘要 <span class="mono">{{ backup_hash[:12] }}</span>。
+    请为每个源固件号指定主库固件号（目标号不得重复）。
+    源端已登记字序的，只能复用字序相同的主库登记，或映射到尚无帧且未登记的新固件号；
+    源端未登记的，目标也须未登记，导入帧留待补解。
+  </p>
+  <form method="post" action="{{ url_for('main.merge_apply') }}">
+    <input type="hidden" name="token" value="{{ token }}">
+    <table>
+      <thead><tr><th>源固件号</th><th>源字序</th><th>帧数</th><th>主库固件号</th></tr></thead>
+      <tbody>
+      {% for s in sources %}
+        <tr>
+          <td class="mono">{{ s.fw_version }}</td>
+          <td>{{ word_orders.get(s.word_order) or '未登记' }}</td>
+          <td>{{ s.frame_count }}</td>
+          <td>
+            <input type="hidden" name="source" value="{{ s.fw_version }}">
+            <input type="text" name="target" value="{{ s.fw_version }}" maxlength="128" required>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p><button type="submit">确认合库</button></p>
+  </form>
+</section>
+
+<section>
+  <h2>主库已登记固件（参考）</h2>
+  {% if firmwares %}
+  <table>
+    <thead><tr><th>固件号</th><th>字序</th><th>帧数</th><th>待解</th></tr></thead>
+    <tbody>
+    {% for fw in firmwares %}
+      <tr>
+        <td class="mono">{{ fw.fw_version }}</td>
+        <td>{{ word_orders.get(fw.word_order, fw.word_order) }}</td>
+        <td>{{ fw.frame_count }}</td>
+        <td>{{ fw.pending_count or 0 }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">主库尚未登记任何固件。</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>备份中的帧</h2>
+  <table>
+    <thead><tr><th>设备号</th><th>帧号</th><th>源固件号</th><th>原始字</th><th>原接收时间</th></tr></thead>
+    <tbody>
+    {% for f in frames %}
+      <tr>
+        <td>{{ f.device_id }}</td>
+        <td>{{ f.frame_no }}</td>
+        <td class="mono">{{ f.fw_version }}</td>
+        <td class="mono">{{ f.raw_word }}</td>
+        <td class="muted">{{ f.received_at }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

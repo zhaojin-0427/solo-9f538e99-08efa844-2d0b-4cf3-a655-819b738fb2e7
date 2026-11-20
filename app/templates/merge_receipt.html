@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block content %}
+<section>
+  <h2>合库回执</h2>
+  {% if replayed %}
+  <p class="flash info">同一备份与同一映射此前已完成合库，本页为原回执，主库未再次变更。</p>
+  {% endif %}
+  <p>共 {{ receipt.total }} 帧：新增 {{ receipt.inserted }}，沿用 {{ receipt.reused }}。</p>
+  <table>
+    <thead><tr><th>源固件号</th><th>源字序</th><th>主库固件号</th><th>处理</th></tr></thead>
+    <tbody>
+    {% for m in receipt.mapping %}
+      <tr>
+        <td class="mono">{{ m.source }}</td>
+        <td>{{ word_orders.get(m.word_order) or '未登记' }}</td>
+        <td class="mono">{{ m.target }}</td>
+        <td>
+          {% if m.action == 'reuse' %}复用主库登记（{{ word_orders[m.word_order] }}）
+          {% elif m.action == 'register' %}新增登记（{{ word_orders[m.word_order] }}）
+          {% else %}不登记，导入帧留待补解{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <p class="muted">
+    回执号 <span class="mono">{{ receipt.receipt_key[:16] }}</span> · 合库时间 {{ receipt.merged_at }}
+  </p>
+  <p><a href="{{ url_for('main.index') }}">返回首页</a></p>
+</section>
+{% endblock %}

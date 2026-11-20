@@ -31,6 +31,22 @@ CREATE TABLE IF NOT EXISTS frames (
 
 CREATE INDEX IF NOT EXISTS idx_frames_fw_status ON frames (fw_version, status);
 CREATE INDEX IF NOT EXISTS idx_frames_device ON frames (device_id, frame_no);
+
+-- 合库：采集台备份的暂存（上传后、映射确认前）与已提交的合库回执。
+-- 回执持久化使"同一备份 + 同一映射"的重交在补解或重启后仍返回原回执。
+CREATE TABLE IF NOT EXISTS merge_staging (
+    token       TEXT PRIMARY KEY,
+    backup_hash TEXT NOT NULL,
+    payload     TEXT NOT NULL,
+    created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+CREATE TABLE IF NOT EXISTS merge_receipts (
+    receipt_key TEXT PRIMARY KEY,
+    backup_hash TEXT NOT NULL,
+    payload     TEXT NOT NULL,
+    created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
 """
 
 
